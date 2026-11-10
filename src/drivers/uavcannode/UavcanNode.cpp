@@ -804,9 +804,21 @@ void UavcanNode::Run()
 				for (size_t i = 0; i < strlen(log_message.text); i++) {
 					if (log_message.text[i] == ']') {
 						// copy [MODULE_NAME] to source
-						memcpy(source, &log_message.text[1], i - 1);
+						/* The loop has no break, so this runs for every ']' and the last one wins.
+						 * `i` is therefore the index of the last bracket in the whole rendered
+						 * message, not the one that closes the module name, and it can be far
+						 * past sizeof(source). Bound both copies by their destination and
+						 * terminate them explicitly: the arrays are fixed-size, so the
+						 * memset at declaration is not enough once memcpy overfills them.
+						 */
+						const size_t source_len = math::min(i - 1, sizeof(source) - 1);
+						memcpy(source, &log_message.text[1], source_len);
+						source[source_len] = '\0';
+
 						// copy remaining text (skipping space after [])
-						memcpy(text, &log_message.text[i + 2], math::min(sizeof(log_message.text) - (i + 2), sizeof(text)));
+						const size_t text_len = math::min(sizeof(log_message.text) - (i + 2), sizeof(text) - 1);
+						memcpy(text, &log_message.text[i + 2], text_len);
+						text[text_len] = '\0';
 
 						text_copied = true;
 					}
@@ -814,7 +826,8 @@ void UavcanNode::Run()
 			}
 
 			if (!text_copied) {
-				memcpy(text, log_message.text, sizeof(text));
+				memcpy(text, log_message.text, sizeof(text) - 1);
+				text[sizeof(text) - 1] = '\0';
 			}
 
 			switch (log_message.severity) {
